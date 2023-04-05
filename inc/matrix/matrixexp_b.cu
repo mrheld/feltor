@@ -75,11 +75,15 @@ int main(int argc, char * argv[])
         [](double x) { return 1./(1.+alpha*x);},
 	//exp with elliptic via quadrature
         [](double x) { 
-		double integral=0.0;
-                int GLs=6; //gl quad wih 64 points
+                double integral=0.0;
+                int GLs=9; //gl quad wih 64 points
+		double bias=10e-10;
 		//exp(-alpha x) = int_0^inf dt exp(t) BesselJ0(2*sqrt(t*alpha*x)) \approx w_i BesselJ0(2*sqrt(t_i*alpha*x))
-		for (int i=0; i<GLo[GLs]; i++) integral+=GLw[GLs][i]*boost::math::cyl_bessel_j(0, 2.*sqrt(GLx[GLs][i]*alpha*x));
-		return integral;	
+		for (int i=0; i<GLo[GLs]; i++) integral+=GLw[GLs][i]*boost::math::cyl_bessel_j(0, 2.*sqrt(GLx[GLs][i]*alpha*x*bias));
+
+ 		//double integral = dg::blas1::dot(GLw[GLs],boost::math::cyl_bessel_j(0, 2.*sqrt(GLx[GLs]*alpha*x)));
+
+		return pow(integral,1./bias);	
 	}
     };
     std::vector<std::string> outs = {
