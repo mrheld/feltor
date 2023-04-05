@@ -14,7 +14,7 @@
 
 
 
-const double eps = 1e-2;
+const double eps = 1e-12;
 const double alpha = -0.5;
 double lhs( double x, double y){ return sin(x)*sin(y);}
 double rhs( double x, double y){ return (1.-2.*alpha)*sin(x)*sin(y);}
