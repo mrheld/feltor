@@ -161,11 +161,11 @@ int main(int argc, char * argv[])
        //exp with elliptic via GLeg quadrature
         [](double x) {            
             const unsigned GLeg_n = 19;
-            const unsigned GLeg_Nx = 30;
+            const unsigned GLeg_Nx = 3;
 	    double integral=0.0;
-            for (unsigned i=0; i<20; i++)
+            for (unsigned i=0; i<10; i++)
 	    {
-          	    dg::Grid1d g1d( BesselJ0Zeros[i]*sqrt(x*alpha), BesselJ0Zeros[i+1]*sqrt(x*alpha), GLeg_n, GLeg_Nx); //Rescaling of zeros might be wrong!!!
+          	    dg::Grid1d g1d( pow(BesselJ0Zeros[i],2.0)/(4.*x*alpha), pow(BesselJ0Zeros[i+1],2.0)/(4.*x*alpha), GLeg_n, GLeg_Nx); //Rescaling of zeros might be wrong!!!
                     Gyrointegrant<double> gyroint(x*alpha,0);
                     const dg::HVec f = dg::evaluate( gyroint, g1d); //f=exp(-t) BesselJ0(2*sqrt(t*alpha*x))
                     const dg::HVec w1d = dg::create::weights( g1d);
