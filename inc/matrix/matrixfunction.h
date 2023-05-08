@@ -70,6 +70,7 @@ auto make_FuncEigen_Te1( UnaryOp f)
     };
 }
 
+
 /**
  * @brief Create a functor that computes \f$ \sqrt{T^{\pm 1}} \vec e_1\f$ using SqrtCauchyInt
  *

@@ -56,7 +56,7 @@ with
    \end{pmatrix}
 \f]
 *
-* The common lanczos method (and M-Lanczos) method are prone to loss of
+* The common Lanczos method (and M-Lanczos) method are prone to loss of
 * orthogonality for finite precision. Here, only the basic Paige fix is used.
 * Thus the iterations should be kept as small as possible. Could be fixed via
 * full, partial or selective reorthogonalization strategies, but so far no
@@ -140,23 +140,15 @@ class UniversalLanczos
      *
      * @return number of iterations of M-Lanczos routine
     */
-    template < class MatrixType, class ContainerType0, class ContainerType1,
-             class ContainerType2, class FuncTe1>
-    unsigned solve(ContainerType0& x, FuncTe1 f,
-            MatrixType&& A, const ContainerType1& b,
-            const ContainerType2& weights, value_type eps,
-            value_type nrmb_correction = 1.,
-            std::string error_norm = "universal",
-            value_type res_fac = 1.,
-            unsigned q = 1 )
+    template < class MatrixType, class ContainerType0, class ContainerType1, class ContainerType2, class FuncTe1>
+    unsigned solve(ContainerType0& x, FuncTe1 f, MatrixType&& A, const ContainerType1& b, const ContainerType2& weights, value_type eps, value_type nrmb_correction = 1.,
+            std::string error_norm = "universal", value_type res_fac = 1., unsigned q = 1 )
     {
-        tridiag( f, std::forward<MatrixType>(A), b, weights, eps,
-                nrmb_correction, error_norm, res_fac, q);
+        tridiag( f, std::forward<MatrixType>(A), b, weights, eps, nrmb_correction, error_norm, res_fac, q);
         if( "residual" == error_norm)
             m_yH = f( m_TH);
         //Compute x = |b|_M V f(T) e1
-        normMbVy(std::forward<MatrixType>(A), m_TH, m_yH, x, b,
-                m_bnorm);
+        normMbVy(std::forward<MatrixType>(A), m_TH, m_yH, x, b, m_bnorm);
         return m_iter;
     }
     /**
@@ -180,24 +172,27 @@ class UniversalLanczos
      *  The number of iterations is given by \c T.num_rows
       */
     template< class MatrixType, class ContainerType0, class ContainerType1>
-    const HDiaMatrix& tridiag( MatrixType&& A, const ContainerType0& b,
-            const ContainerType1& weights, value_type eps = 1e-12,
-            value_type nrmb_correction = 1.,
-            std::string error_norm = "universal", value_type res_fac = 1.,
-            unsigned q = 1
-        )
+    const HDiaMatrix& tridiag( MatrixType&& A, const ContainerType0& b, const ContainerType1& weights, value_type eps = 1e-12, value_type nrmb_correction = 1., std::string error_norm = "universal", value_type res_fac = 1., unsigned q = 1 )
     {
-        auto op = make_Linear_Te1( -1);
+        auto op = make_Linear_Te1( -1); //why using inverse ???
         tridiag( op, std::forward<MatrixType>(A), b, weights, eps,
                 nrmb_correction, error_norm, res_fac, q);
         return m_TH;
     }
 
+    /*template< class MatrixType, class ContainerType0, class ContainerType1, class UnaryOp>
+    const HDiaMatrix& tridiag( UnaryOp f, MatrixType&& A, const ContainerType0& b, const ContainerType1& weights, value_type eps = 1e-12, value_type nrmb_correction = 1., std::string error_norm = "universal", value_type res_fac = 1., unsigned q = 1 )
+    {
+        tridiag( f, std::forward<MatrixType>(A), b, weights, eps,
+                nrmb_correction, error_norm, res_fac, q);
+        return m_TH;
+    }*/
+    
     ///@brief Get the number of iterations in the last call to \c tridiag or \c solve
     /// (same as T.num_rows)
     ///@return the number of iterations in the last call to \c tridiag or \c solve
     unsigned get_iter() const {return m_iter;}
-  private:
+  
 
     /** @brief compute \f$ x = |b|_W V y \f$ from a given tridiagonal matrix T
      * and in-place re-computation of V
@@ -213,11 +208,7 @@ class UniversalLanczos
      */
     template< class MatrixType, class DiaMatrixType, class ContainerType0,
         class ContainerType1,class ContainerType2>
-    void normMbVy( MatrixType&& A,
-            const DiaMatrixType& T,
-            const ContainerType0& y,
-            ContainerType1& x,
-            const ContainerType2& b, value_type bnorm)
+    void normMbVy( MatrixType&& A, const DiaMatrixType& T, const ContainerType0& y, ContainerType1& x, const ContainerType2& b, value_type bnorm)
     {
         dg::blas1::copy(0., x);
         if( 0 == bnorm )
@@ -235,25 +226,17 @@ class UniversalLanczos
         for ( unsigned i=0; i<less_iter-1; i++)
         {
             dg::blas2::symv( std::forward<MatrixType>(A), m_v, m_vp);
-            dg::blas1::axpbypgz(
-                    -T.values(i,0)/T.values(i,2), m_vm,
-                    -T.values(i,1)/T.values(i,2), m_v,
-                               1.0/T.values(i,2), m_vp);
+            dg::blas1::axpbypgz( -T.values(i,0)/T.values(i,2), m_vm, -T.values(i,1)/T.values(i,2), m_v, 1.0/T.values(i,2), m_vp);
             dg::blas1::axpby( y[i+1]*bnorm, m_vp, 1., x); //Compute b= |b| V y
             m_vm.swap( m_v);
             m_v.swap( m_vp);
 
         }
     }
-    template < class MatrixType, class ContainerType1,
-             class ContainerType2, class UnaryOp>
-    void tridiag(UnaryOp f,
-            MatrixType&& A, const ContainerType1& b,
-            const ContainerType2& weights, value_type eps,
-            value_type nrmb_correction,
-            std::string error_norm = "residual",
-            value_type res_fac = 1.,
-            unsigned q = 1 )
+
+    template < class MatrixType, class ContainerType1, class ContainerType2, class UnaryOp>    
+    //     void tridiag(UnaryOp f, MatrixType&& A, const ContainerType1& b, const ContainerType2& weights, value_type eps, value_type nrmb_correction, std::string error_norm = "residual", value_type res_fac = 1., unsigned q = 1 )
+    const HDiaMatrix& tridiag(UnaryOp f, MatrixType&& A, const ContainerType1& b, const ContainerType2& weights, value_type eps, value_type nrmb_correction, std::string error_norm = "residual", value_type res_fac = 1., unsigned q = 1 )
     {
 #ifdef MPI_VERSION
         int rank;
@@ -269,7 +252,8 @@ class UniversalLanczos
         if( m_bnorm == 0)
         {
             set_iter(1);
-            return;
+//             return;
+            return m_TH;
         }
         value_type residual;
         dg::blas1::axpby(1./m_bnorm, b, 0.0, m_v); //m_v[1] = x/||x||
@@ -325,15 +309,16 @@ class UniversalLanczos
             m_v.swap( m_vp);
             set_iter( m_max_iter);
         }
+        return m_TH;
     }
-    value_type compute_residual_error( const HDiaMatrix& TH, unsigned iter)
+   private:
+   value_type compute_residual_error( const HDiaMatrix& TH, unsigned iter)
     {
         value_type T1 = compute_Tinv_m1( TH, iter+1);
         return TH.values(iter,2)*fabs(T1); //Tinv_i1
     }
     template<class UnaryOp>
-    value_type compute_universal_error( const HDiaMatrix& TH, unsigned iter,
-            unsigned q, UnaryOp f, HVec& yH)
+    value_type compute_universal_error( const HDiaMatrix& TH, unsigned iter, unsigned q, UnaryOp f, HVec& yH)
     {
         unsigned new_iter = iter + 1 + q;
         set_iter( iter+1);

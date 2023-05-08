@@ -67,11 +67,8 @@ int main(int argc, char * argv[])
         [](double x) { return sqrt(alpha*x);},
         [](double x) { return 1./sqrt(alpha*x);},
         [](double x) { return exp(-alpha*x);},
-        [](double x) {
-           return boost::math::cyl_bessel_j(0, alpha*sqrt(x));},
-        [](double x){
-            return exp(-alpha*x)*boost::math::cyl_bessel_i(0, -alpha*x);
-        },
+        [](double x) { return boost::math::cyl_bessel_j(0, alpha*sqrt(x));},
+        [](double x) { return exp(-alpha*x)*boost::math::cyl_bessel_i(0, -alpha*x);},
         [](double x) { return 1./(alpha*x);},
 	//Helmholtz
         [](double x) { return sqrt(1.+alpha*x);},
@@ -82,10 +79,10 @@ int main(int argc, char * argv[])
 	    "Sqrt(alpha A)", 
 	    "Inv(Sqrt(alpha A))", 
 	    "Exp(-alpha A)",
-            "BesselJ0(alpha Sqrt( A))",
+        "BesselJ0(alpha Sqrt( A))",
 	    "Exp(-alpha A) BesselI0(-alpha A)", 
 	    "Inv(alpha A)",
-            "Sqrt(1+alpha A)", 
+        "Sqrt(1+alpha A)", 
 	    "Inv(Sqrt(1+alpha A))", 
 	    "Inv(1+alpha A)"};
     for( unsigned u=0; u<funcs.size(); u++)
