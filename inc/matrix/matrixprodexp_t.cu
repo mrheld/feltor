@@ -29,6 +29,7 @@ const double alpha = 1./2.;
 const double ell_fac = (m*m+n*n);
 
 double lhs( double x, double y){ return sin(x*m)*sin(y*n);}
+double lhs2( double x, double y){ return sin(x)*sin(y);}
 
 using Matrix = dg::DMatrix;
 using Container = dg::DVec;
@@ -104,9 +105,9 @@ int main(int argc, char * argv[])
         Container x = dg::evaluate(lhs, g), x_exac(x), x_h(x), b(x), error(x);
         Container one = dg::evaluate(dg::ONE(), g);
         
-//         Container d = dg::evaluate(dg::ONE(), g);
+        Container d = dg::evaluate(dg::ONE(), g);
 //         Container d = dg::evaluate(dg::SinXSinY(0.5, 1.0, 1, 1), g);
-        Container d = dg::evaluate(dg::Cauchy(lx/2., ly/2., 3./2., 3./2., 0.5), g); //bump function
+//         Container d = dg::evaluate(dg::Cauchy(lx/2., ly/2., 3./2., 3./2., 0.5), g); //bump function
 //         dg::blas1::plus(d, 1.0);
         
         Container b_h(b);
@@ -208,8 +209,9 @@ int main(int argc, char * argv[])
                         dg::blas1::pointwiseDot(evecs(i,l)*evecs(k,i), fd, v[k], 1.0, c[l]); //c_l += (eps_{i,l} eps_{k,i}) f(lambda_i d) * v_k
                     }
                 }
-                dg::blas1::axpby(dg::blas2::dot(c[l], w2d, b)/krylovfunceigen.get_bnorm()/krylovfunceigen.get_bnorm(),  v[l], 1., x); //x += (c_l.M b) v_l 
+                dg::blas1::axpby(dg::blas2::dot(c[l], w2d, b),  v[l], 1., x); //x += (c_l.M b) v_l 
             }
+            dg::blas1::scal(x, 1./krylovfunceigen.get_bnorm()/krylovfunceigen.get_bnorm()); // x= x/||b||_M^2
             t.toc();
             time = t.diff();
             
@@ -259,22 +261,28 @@ int main(int argc, char * argv[])
         }
         else 
         {
-             //Compute exact error for product exponential (is used also for adjoint product exponential since we have no analytical solution there)
             Container fd(d); // helper variable
-            x_h = dg::evaluate(lhs, g);
-            dg::blas1::axpby(ell_fac, d, 0.0, fd);
-            dg::blas1::transform(fd, fd, dg::mat::GyrolagK<double>(0.,-alpha));
-            dg::blas1::pointwiseDot(fd, x_h, x_exac); //x_exac = f(-alpha*(m^2+n^2) d) sin(m x) cos(n y)
-            //Compute absolute and relative error in adjointness
+            //Compute absolute and relative error in adjointness //not useful if the operator is self-adjoint! use general g!
             if (u==2 || u==4)
             {
-                double erel_adj = dg::blas2::dot( x_h, w2d, x_exac); //<f,exp(d,-alpha A) f>
-                std::cout << "<f, exp(d,-alpha A) f> = " << erel_adj << std::endl;
-                double eabs_adj = erel_adj-dg::blas2::dot( x, w2d, x_h); // <f,exp(d,-alpha A) f> -<exp(-alpha A, d)f, f>
+                x_h = dg::evaluate(lhs2, g);
+                dg::blas1::axpby(2, d, 0.0, fd);
+                dg::blas1::transform(fd, fd, dg::mat::GyrolagK<double>(0.,-alpha));
+                dg::blas1::pointwiseDot(fd, x_h, x_exac); //x_exac = f(-alpha*(1^2+1^2) d) sin(x) cos(y) \equiv exp(d,-alpha A) g
+                x_h = dg::evaluate(lhs, g);
+                double erel_adj = dg::blas2::dot( x_h, w2d, x_exac); //<f,exp(d,-alpha A) g>
+                std::cout << "<f, exp(d,-alpha A) g> = " << erel_adj << std::endl;
+                double eabs_adj = erel_adj-dg::blas2::dot( x, w2d, x_h); // <f,exp(d,-alpha A) g> -<exp(-alpha A, d)f, g>
                 std::cout << "    universal-abserror-adjointness: "<< eabs_adj  << "\n"; 
                 erel_adj = eabs_adj/erel_adj; //(<f,exp(d,-alpha A) f> -<exp(-alpha A, d)f, f>)/<f,exp(d,-alpha A) f>
                 std::cout << "    universal-relerror-adjointness: "<< erel_adj  << "\n";
             }
+            
+            //Compute exact error for product exponential (is used also for adjoint product exponential since we have no analytical solution there)
+            x_h = dg::evaluate(lhs, g);
+            dg::blas1::axpby(ell_fac, d, 0.0, fd);
+            dg::blas1::transform(fd, fd, dg::mat::GyrolagK<double>(0.,-alpha));
+            dg::blas1::pointwiseDot(fd, x_h, x_exac); //x_exac = f(-alpha*(m^2+n^2) d) sin(m x) cos(n y)
         }        
         dg::blas1::axpby(1.0, x, -1.0, x_exac, error);
         erel = sqrt(dg::blas2::dot( w2d, error) / dg::blas2::dot( w2d, x_exac));
