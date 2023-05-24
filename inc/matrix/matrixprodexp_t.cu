@@ -25,11 +25,14 @@ dg::bc bcx = dg::DIR;
 dg::bc bcy = dg::PER;
 const double m=4.;
 const double n=4.;
+const double ms=2.;
+const double ns=2.;
 const double alpha = 1./2.;
 const double ell_fac = (m*m+n*n);
+const double ell_facs = (ms*ms+ns*ns);
 
 double lhs( double x, double y){ return sin(x*m)*sin(y*n);}
-double lhs2( double x, double y){ return sin(x)*sin(y);}
+double lhss( double x, double y){ return sin(x*ms)*sin(y*ns);}
 
 using Matrix = dg::DMatrix;
 using Container = dg::DVec;
@@ -105,9 +108,9 @@ int main(int argc, char * argv[])
         Container x = dg::evaluate(lhs, g), x_exac(x), x_h(x), b(x), error(x);
         Container one = dg::evaluate(dg::ONE(), g);
         
-        Container d = dg::evaluate(dg::ONE(), g);
+//         Container d = dg::evaluate(dg::ONE(), g);
 //         Container d = dg::evaluate(dg::SinXSinY(0.5, 1.0, 1, 1), g);
-//         Container d = dg::evaluate(dg::Cauchy(lx/2., ly/2., 3./2., 3./2., 0.5), g); //bump function
+        Container d = dg::evaluate(dg::Cauchy(lx/2., ly/2., 3./2., 3./2., 5.0), g); //bump function
 //         dg::blas1::plus(d, 1.0);
         
         Container b_h(b);
@@ -201,7 +204,7 @@ int main(int argc, char * argv[])
             for( unsigned l=0; l<iter; l++)
             {
                 for( unsigned i=0; i<iter; i++)
-                {                    
+                {        
                     dg::blas1::axpby( evals[i], d, 0., fd); //fd = lambda_i d
                     dg::blas1::transform(fd, fd, dg::mat::GyrolagK<double>(0.,-alpha)); //fd =  f(lambda_i d)
                     for( unsigned k=0; k<iter; k++)
@@ -235,21 +238,26 @@ int main(int argc, char * argv[])
         {
             dg::blas1::scal(x, 0.0);
             double lambda_d = 0.;
+            iter_sum=0;
             t.tic();
             for( unsigned k=0; k<x.size(); k++)
             {
-                lambda_d = d[k];
+//                 lambda_d = d[k];
+//                 A.set_chi(lambda_d);
+//                 dg::blas1::scal(b_h, 0.0);
+//                 b_h[k] = b[k];
+//                 iter = krylovfunceigen.solve(x_h, func, A, b_h, w2d, eps, 1., "universal");
+//                 iter_sum+=iter;
+//                 dg::blas1::axpby(1.0, x_h, 1.0, x);
+                  lambda_d = d[k];
                 A.set_chi(lambda_d);
-                dg::blas1::scal(b_h, 0.0);
-                b_h[k]=b[k];
-                iter = krylovfunceigen.solve(x_h, func, A, b_h, w2d, eps, 1., "universal");
+                iter = krylovfunceigen.solve(x_h, func, A, b, w2d, eps, 1., "universal");
                 iter_sum+=iter;
-                dg::blas1::axpby(1.0, x_h, 1.0, x);
+                x[k] = x_h[k];
             }
             t.toc();
             time = t.diff();
         }
-         
         //write solution into file
         dg::assign( x, transferH);
         dg::file::put_vara_double( ncid, dataIDs[u], start, g, transferH);
@@ -265,17 +273,21 @@ int main(int argc, char * argv[])
             //Compute absolute and relative error in adjointness //not useful if the operator is self-adjoint! use general g!
             if (u==2 || u==4)
             {
-                x_h = dg::evaluate(lhs2, g);
-                dg::blas1::axpby(2, d, 0.0, fd);
+                x_h = dg::evaluate(lhss, g); // -> g
+                dg::blas1::axpby(ell_facs, d, 0.0, fd);
                 dg::blas1::transform(fd, fd, dg::mat::GyrolagK<double>(0.,-alpha));
-                dg::blas1::pointwiseDot(fd, x_h, x_exac); //x_exac = f(-alpha*(1^2+1^2) d) sin(x) cos(y) \equiv exp(d,-alpha A) g
-                x_h = dg::evaluate(lhs, g);
-                double erel_adj = dg::blas2::dot( x_h, w2d, x_exac); //<f,exp(d,-alpha A) g>
-                std::cout << "<f, exp(d,-alpha A) g> = " << erel_adj << std::endl;
-                double eabs_adj = erel_adj-dg::blas2::dot( x, w2d, x_h); // <f,exp(d,-alpha A) g> -<exp(-alpha A, d)f, g>
+                dg::blas1::pointwiseDot(fd, x_h, x_exac); //x_exac = f(-alpha*(ms^2+ns^2) d) sin(x*ms) cos(y*ms) \equiv exp(d,-alpha A) g
+                x_h = dg::evaluate(lhs, g); // -> f
+                double fOg = dg::blas2::dot( x_h, w2d, x_exac); //<f,exp(d,-alpha A) g>
+                std::cout << "<f, exp(d,-alpha A) g> = " << fOg << std::endl;
+                x_h = dg::evaluate(lhss, g); // -> g
+                double gOadjf = dg::blas2::dot( x, w2d, x_h); //<exp(-alpha A, d)f, g>
+                std::cout << "<exp(-alpha A, d)f, g> = " << gOadjf << std::endl;
+
+                double eabs_adj = fOg-gOadjf; // <f,exp(d,-alpha A) g> -<exp(-alpha A, d)f, g>
                 std::cout << "    universal-abserror-adjointness: "<< eabs_adj  << "\n"; 
-                erel_adj = eabs_adj/erel_adj; //(<f,exp(d,-alpha A) f> -<exp(-alpha A, d)f, f>)/<f,exp(d,-alpha A) f>
-                std::cout << "    universal-relerror-adjointness: "<< erel_adj  << "\n";
+                fOg = eabs_adj/fOg; //(<f,exp(d,-alpha A) g> -<exp(-alpha A, d)f, g>)/<f,exp(d,-alpha A) g> //does a relative error make sense here?
+                std::cout << "    universal-relerror-adjointness: "<< fOg  << "\n";
             }
             
             //Compute exact error for product exponential (is used also for adjoint product exponential since we have no analytical solution there)
