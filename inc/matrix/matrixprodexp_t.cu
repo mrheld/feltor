@@ -281,8 +281,7 @@ int main(int argc, char * argv[])
 
                 double eabs_adj = fOg-gOadjf; // <f,exp(d,-alpha A) g> -<exp(-alpha A, d)f, g>
                 std::cout << "    universal-abserror-adjointness: "<< eabs_adj  << "\n"; 
-                fOg = eabs_adj/fOg; //(<f,exp(d,-alpha A) g> -<exp(-alpha A, d)f, g>)/<f,exp(d,-alpha A) g> //does a relative error make sense here?
-                std::cout << "    universal-relerror-adjointness: "<< fOg  << "\n";
+                std::cout << "    universal-relerror-adjointness: "<< eabs_adj/fOg;  << "\n";
             }
             
             //Compute exact error for product exponential (is used also for adjoint product exponential since we have no analytical solution there)
