@@ -242,18 +242,13 @@ int main(int argc, char * argv[])
             t.tic();
             for( unsigned k=0; k<x.size(); k++)
             {
-//                 lambda_d = d[k];
-//                 A.set_chi(lambda_d);
-//                 dg::blas1::scal(b_h, 0.0);
-//                 b_h[k] = b[k];
-//                 iter = krylovfunceigen.solve(x_h, func, A, b_h, w2d, eps, 1., "universal");
-//                 iter_sum+=iter;
-//                 dg::blas1::axpby(1.0, x_h, 1.0, x);
-                  lambda_d = d[k];
+                lambda_d = d[k];
                 A.set_chi(lambda_d);
-                iter = krylovfunceigen.solve(x_h, func, A, b, w2d, eps, 1., "universal");
+                dg::blas1::scal(b_h, 0.0);
+                b_h[k] = b[k];
+                iter = krylovfunceigen.solve(x_h, func, A, b_h, w2d, eps, 1., "universal");
                 iter_sum+=iter;
-                x[k] = x_h[k];
+                dg::blas1::axpby(1.0, x_h, 1.0, x);
             }
             t.toc();
             time = t.diff();
