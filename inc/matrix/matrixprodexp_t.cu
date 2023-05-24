@@ -4,6 +4,8 @@
 #include <iomanip>
 
 #include "dg/algorithm.h"
+#include "dg/file/file.h"
+
 #include "lanczos.h"
 #include "mcg.h"
 #include "matrixfunction.h"
@@ -23,7 +25,7 @@ dg::bc bcx = dg::DIR;
 dg::bc bcy = dg::PER;
 const double m=4.;
 const double n=4.;
-const double alpha = 0.5;
+const double alpha = 1./2.;
 const double ell_fac = (m*m+n*n);
 
 double lhs( double x, double y){ return sin(x*m)*sin(y*n);}
@@ -68,26 +70,46 @@ int main(int argc, char * argv[])
     std::vector< std::function<double (double)>> funcs{
         [](double x) { return dg::mat::GyrolagK<double>(0.,-alpha)(x);},
         [](double x) { return dg::mat::GyrolagK<double>(0.,-alpha)(x);},
+        [](double x) { return dg::mat::GyrolagK<double>(0.,-alpha)(x);},
+        [](double x) { return dg::mat::GyrolagK<double>(0.,-alpha)(x);},
         [](double x) { return dg::mat::GyrolagK<double>(0.,-alpha)(x);}        
     };
     std::vector<std::string> outs = {
             "K_0(-alpha A)",
-            "K_0_prod(-alpha A)",
-            "K_0_prodadj(-alpha A)"
-//             "K_0_naive(-alpha A)"
+            "K_0(d, -alpha A)",
+            "K_0(-alpha A, d)",
+            "K_0_naive(d, -alpha A)",
+            "K_0_naive(-alpha A, d)"
     };
+    
+    //Plot into netcdf file
+    size_t start = 0;
+    dg::file::NC_Error_Handle err;
+    int ncid;
+    err = nc_create( "visual.nc", NC_NETCDF4|NC_CLOBBER, &ncid);
+    int dim_ids[5], tvarID;
+    err = dg::file::define_dimensions( ncid, dim_ids, &tvarID, g);
+
+    std::string names[5] = {"K0","K0_prod","K0_prodadj","K0_prod_naive","K0_prodadj_naive"};
+    int dataIDs[5];
+    for( unsigned i=0; i<5; i++){
+    err = nc_def_var( ncid, names[i].data(), NC_DOUBLE, 3, dim_ids, &dataIDs[i]);}
+
+    dg::HVec transferH(dg::evaluate(dg::zero, g));
+        
     for( unsigned u=0; u<funcs.size(); u++)
     {
         std::cout << "\n#Compute x = "<<outs[u]<<" b " << std::endl;
 
         Container x = dg::evaluate(lhs, g), x_exac(x), x_h(x), b(x), error(x);
         Container one = dg::evaluate(dg::ONE(), g);
-
+        
 //         Container d = dg::evaluate(dg::ONE(), g);
 //         Container d = dg::evaluate(dg::SinXSinY(0.5, 1.0, 1, 1), g);
         Container d = dg::evaluate(dg::Cauchy(lx/2., ly/2., 3./2., 3./2., 0.5), g); //bump function
-        dg::blas1::plus(d, 1.0);
+//         dg::blas1::plus(d, 1.0);
         
+        Container b_h(b);
         std::cout << outs[u] << ":\n";
 
         dg::mat::UniversalLanczos<Container> krylovfunceigen( x, max_iter);
@@ -95,39 +117,33 @@ int main(int argc, char * argv[])
 
         auto func = dg::mat::make_FuncEigen_Te1( funcs[u]);
         double time = t.diff();
-	//MLanczos-universal
+        unsigned iter_sum=0;
+        
+        //MLanczos-universal
         if (u==0)
         {
             t.tic();
             iter= krylovfunceigen.solve(x, func, A, b, w2d, eps, 1., "universal");
             t.toc();
             time = t.diff();
-            std::cout << "    universal-iter: "<<std::setw(3)<<iter << "\n";
-            
-            dg::blas1::scal(x_exac, funcs[u](ell_fac));
-
         }
         if (u==1)
         {
             t.tic();
             //Tridiagonalize A first to T with the stopping condition for the function exp(-max(d)*alpha A)
             auto Tf = krylovfunceigen.tridiag(func, A,  b, w2d, eps, 1.,  "universal");
-//          cusp::print(Tf);
             iter = krylovfunceigen.get_iter();
-            std::cout << "    universal-iter: "<<std::setw(3)<< iter << "\n";
             
             //make eigendecomposition of f(d T) e_1 = E_T f(d eval_T) E_T^T e_1
             cusp::array2d< double, cusp::host_memory> evecs(iter,iter);
             cusp::array1d< double, cusp::host_memory> evals(iter);
             cusp::lapack::stev(Tf.values.column(1), Tf.values.column(2), evals, evecs, 'V');
-//             cusp::print(evecs);
             
             //Compute c[l], v[l] and utlize them for x
             std::vector<Container> c{iter,d}, v{iter,d};
             dg::HVec e_l(iter,0.); //unit vector e_l
             Container fd(d); // helper variable
             dg::blas1::scal(x,0.0);
-
             for( unsigned l=0; l<iter; l++)
             {
                 dg::blas1::copy( 0, c[l]); // init sum
@@ -150,29 +166,21 @@ int main(int argc, char * argv[])
             }
             t.toc();
             time = t.diff();
-            
-            //Compute exact error for product exponential
-            dg::blas1::axpby(ell_fac, d, 0.0, fd);
-            dg::blas1::transform(fd, fd, dg::mat::GyrolagK<double>(0.,-alpha));
-            dg::blas1::pointwiseDot(fd, x_exac, x_exac); //f(-alpha*(m^2+n^2) d) sin(m x) cos(n y)
         }
         if (u==2)
-        {
-           t.tic();
+        {   
+            t.tic();
              //Tridiagonalize A first to T with the stopping condition for the function exp(-max(d)*alpha A)
             auto Tf = krylovfunceigen.tridiag(func, A,  b, w2d, eps, 1.,  "universal");
-//          cusp::print(Tf);
             iter = krylovfunceigen.get_iter();
-            std::cout << "    universal-iter: "<<std::setw(3)<< iter << "\n";
             
             //make eigendecomposition of f(d T) e_1 = E_T f(d eval_T) E_T^T e_1
             cusp::array2d< double, cusp::host_memory> evecs(iter,iter);
             cusp::array1d< double, cusp::host_memory> evals(iter);
             cusp::lapack::stev(Tf.values.column(1), Tf.values.column(2), evals, evecs, 'V');
-//             cusp::print(evecs);
             
             //Compute c[l], v[l] and utlize them for x
-            std::vector<Container> v{iter,d}, vT{iter,d},  c{iter,d};
+            std::vector<Container> v{iter,d}, c{iter,d};
             dg::HVec e_k(iter, 0.); //unit vector e_k
             Container fd(d); // helper variable
             dg::blas1::scal(x, 0.0);
@@ -181,15 +189,12 @@ int main(int argc, char * argv[])
             for( unsigned k=0; k<iter; k++)
             {
                 dg::blas1::copy( 0, v[k]); // init sum
-//                 dg::blas1::copy( 0, vT[k]); // init sum
                 dg::blas1::copy( 0, c[k]); // init sum
-//                 dg::blas1::copy( 0, fd[k]); // init sum
                 //e_l
                 e_k[k] = 1.;
                 if (k>0) e_k[k-1]=0.;
                 //compute v[l]
                 krylovfunceigen.normMbVy(A, Tf, e_k, v[k], b, 1.0); //v_k=  V e_k
-//                 dg::blas2::symv(w2d, v[k], vT[k]); //vT_k = (M V) 
             }
             //Compute v[k]
             for( unsigned l=0; l<iter; l++)
@@ -203,133 +208,82 @@ int main(int argc, char * argv[])
                         dg::blas1::pointwiseDot(evecs(i,l)*evecs(k,i), fd, v[k], 1.0, c[l]); //c_l += (eps_{i,l} eps_{k,i}) f(lambda_i d) * v_k
                     }
                 }
-                dg::blas1::axpby(dg::blas2::dot(c[l], w2d, b)/krylovfunceigen.get_bnorm()/krylovfunceigen.get_bnorm(),  v[l], 1., x); //x += (c_l.M b) v_l //weights needed here?
+                dg::blas1::axpby(dg::blas2::dot(c[l], w2d, b)/krylovfunceigen.get_bnorm()/krylovfunceigen.get_bnorm(),  v[l], 1., x); //x += (c_l.M b) v_l 
             }
             t.toc();
             time = t.diff();
             
-            //Compute exact error for product exponential (is used also for adjoint product exponential since we have no analytical solution there)
+        }
+        if (u==3) 
+        {
+            t.tic();
+            double lambda_d = 0.;
+            for( unsigned k=0; k<x.size(); k++)
+            {
+                lambda_d = d[k];
+                A.set_chi(lambda_d);
+                iter = krylovfunceigen.solve(x_h, func, A, b, w2d, eps, 1., "universal");
+                iter_sum+=iter;
+                x[k] = x_h[k];
+            }
+            t.toc();
+            time = t.diff();
+        }
+        if (u==4) 
+        {
+            dg::blas1::scal(x, 0.0);
+            double lambda_d = 0.;
+            t.tic();
+            for( unsigned k=0; k<x.size(); k++)
+            {
+                lambda_d = d[k];
+                A.set_chi(lambda_d);
+                dg::blas1::scal(b_h, 0.0);
+                b_h[k]=b[k];
+                iter = krylovfunceigen.solve(x_h, func, A, b_h, w2d, eps, 1., "universal");
+                iter_sum+=iter;
+                dg::blas1::axpby(1.0, x_h, 1.0, x);
+            }
+            t.toc();
+            time = t.diff();
+        }
+         
+        //write solution into file
+        dg::assign( x, transferH);
+        dg::file::put_vara_double( ncid, dataIDs[u], start, g, transferH);
+      
+        //Compute errors
+        if (u==0)
+        {
+            dg::blas1::scal(x_exac, funcs[u](ell_fac));
+        }
+        else 
+        {
+             //Compute exact error for product exponential (is used also for adjoint product exponential since we have no analytical solution there)
+            Container fd(d); // helper variable
             x_h = dg::evaluate(lhs, g);
             dg::blas1::axpby(ell_fac, d, 0.0, fd);
             dg::blas1::transform(fd, fd, dg::mat::GyrolagK<double>(0.,-alpha));
             dg::blas1::pointwiseDot(fd, x_h, x_exac); //x_exac = f(-alpha*(m^2+n^2) d) sin(m x) cos(n y)
-            
             //Compute absolute and relative error in adjointness
-            double erel_adj = dg::blas2::dot( x_h, w2d, x_exac); //<f,exp(g,-A) f>
-            double eabs_adj = erel_adj-dg::blas2::dot( x, w2d, x_h); // <f,exp(g,-A) f> -<exp(-A,g)f, f>
-            std::cout << "    universal-abserror-adjointness: "<< eabs_adj  << "\n"; 
-            erel_adj = eabs_adj/erel_adj; //(<f,exp(g,-A) f> -<exp(-A,g)f, f>)/<f,exp(g,-A) f>
-            std::cout << "    universal-relerror-adjointness: "<< erel_adj  << "\n";
-        }
-//         if (u==2)
-//         {
-//             t.tic();
-//             //Tridiagonalize diagonal matrix D
-//             //test for b=1
-// //             Container b = dg::evaluate(dg::ONE(), g);
-// 
-//             auto Rf = krylovfunceigend.tridiag(func, d,  b, w2d, eps, 1.,  "universal");
-//             unsigned iter_Rf = krylovfunceigend.get_iter();
-//             std::cout << "    universal-iter-Rf: "<<std::setw(3)<< iter_Rf << "\n";
-// //             cusp::print(Rf);
-//             
-//             //make eigendecomposition of Rf = E_Rf  eval_Rf E_Rf^T 
-//             cusp::array2d< double, cusp::host_memory> evecs_Rf(iter_Rf,iter_Rf);
-//             cusp::array1d< double, cusp::host_memory> evals_Rf(iter_Rf);
-//             cusp::lapack::stev(Rf.values.column(1), Rf.values.column(2), evals_Rf, evecs_Rf, 'V');
-//             cusp::coo_matrix<int, double, cusp::host_memory> E_Rf, E_Rf_t;
-//             cusp::convert(evecs_Rf, E_Rf);
-//             cusp::transpose(E_Rf, E_Rf_t);
-//             
-//             
-//             //Compute h_k
-//             dg::HVec e_1(iter_Rf,0.), e_k(e_1), y(e_1); //unit vector e_1
-//             std::vector<dg::HVec> h{iter_Rf, e_1};
-//             std::vector<Container> v{iter_Rf, d}; 
-//             e_1[0] = 1.;
-//             
-//             dg::blas2::symv(E_Rf_t, e_1, y); //y = E_Rf^T e_1
-//             dg::blas1::scal(x,0.0);
-//             for( unsigned k=0; k<iter_Rf; k++)
-//             {
-//                 e_k[k] = 1.;
-//                 if (k>0) e_k[k-1]=0.;
-//                 
-//                 dg::blas1::pointwiseDot(e_k, y, y); //y = e_k * (E_Rf^T e_1)
-//                 dg::blas2::symv(E_Rf, y, h[k]);
-//                 
-//                 krylovfunceigend.normMbVy(d, Rf, h[k], v[k], b, krylovfunceigend.get_bnorm()); //v[k]=  ||b|| V_Rf h[k]
-//                 
-//                 //Solve 
-//                 iter= krylovfunceigen.solve(x_h, func, A, v[k], w2d, eps, 1., "universal"); // x_h = ||v_k|| V_Tf f(Tf lambda_Rf,k) v[k]
-//                 dg::blas1::axpby(1.0, x_h, 1.0, x);
-//                 std::cout << "    universal-iter-Tf: "<<std::setw(3)<< krylovfunceigen.get_iter() << "\n";
-// 
-//             }
-//             
-//             //Tridiagonalize A first to T with the stopping condition for the function exp(-max(d)*alpha A)
-//             t.toc();
-//             time = t.diff();
-//             
-//             //test function
-//             x_h = dg::evaluate(lhs, g);
-//             
-//             //exact analytical solution not derivable for adjoint, using instead the exact solution of the non-adjoint operator
-//             x_exac = dg::evaluate(lhs, g);
-//             dg::blas1::scal(x_exac, funcs[u](ell_fac));
-//             
-//             
-//             //Compute relative error in adjointness
-//             double erel_adj = dg::blas2::dot( x_h, w2d, x_exac); //<f,exp(g,-A) f>
-//             erel_adj= (erel_adj-dg::blas2::dot( x, w2d, x_h))/erel_adj; //(<f,exp(g,-A) f> -<exp(-A,g)f, f>)/<f,exp(g,-A) f>
-//             std::cout << "    universal-error-adjointness: "<<erel_adj  << "\n";
-// 
-//             
-//             //Compute exact error for product exponential
-// //             dg::blas1::axpby(ell_fac, d, 0.0, fd);
-// //             dg::blas1::transform(fd, fd, dg::mat::GyrolagK<double>(0.,-alpha));
-// //             dg::blas1::pointwiseDot(fd, x_exac, x_exac); //f(-alpha*(m^2+n^2) d) sin(m x) cos(n y)
-//         }
-//         if (u==3)
-//         {
-//             t.tic();
-//             for( unsigned k=0; k<x.size(); k++)
-//             {x_exac
-// //                 A.set_chi(lambda_d[k]);
-//                 iter= krylovfunceigen.solve(x_h, func, A, b, w2d, eps, 1., "universal");
-// //                 std::cout << "    universal-iter[k]: "<<std::setw(3)<<iter <<"[" << k <<"]"<< "\n";
-//                 iter_sum+=iter;
-//                 x[k] = x_h[k];
-//             }
-//             t.toc();
-//             time = t.diff();
-//             std::cout << "    universal-iter_sum: "<<std::setw(3)<<iter_sum << "\n";
-//         }
- // K_0_prodadj_naive
-//         if (u==4) 
-//         {
-//             //             dg::blas1::scal(x, 0.0);
-//             double lambda_d = 0.;
-//             t.tic();
-//             for( unsigned k=0; k<x.size(); k++)
-//             {
-//                 lambda_d = d[k];
-//                 A.set_chi(lambda_d);
-//                 dg::blas1::scal(b_h, 0.0);
-//                 b_h[k]=b[k];
-//                 iter= krylovfunceigen.solve(x_h, func, A, b_h, w2d, eps, 1., "universal");
-//                 dg::blas1::axpby(1.0, x_h, 1.0, x);
-//                 
-//             }
-//             t.toc();
-//             time = t.diff();
-//         }
+            if (u==2 || u==4)
+            {
+                double erel_adj = dg::blas2::dot( x_h, w2d, x_exac); //<f,exp(d,-alpha A) f>
+                std::cout << "<f, exp(d,-alpha A) f> = " << erel_adj << std::endl;
+                double eabs_adj = erel_adj-dg::blas2::dot( x, w2d, x_h); // <f,exp(d,-alpha A) f> -<exp(-alpha A, d)f, f>
+                std::cout << "    universal-abserror-adjointness: "<< eabs_adj  << "\n"; 
+                erel_adj = eabs_adj/erel_adj; //(<f,exp(d,-alpha A) f> -<exp(-alpha A, d)f, f>)/<f,exp(d,-alpha A) f>
+                std::cout << "    universal-relerror-adjointness: "<< erel_adj  << "\n";
+            }
+        }        
         dg::blas1::axpby(1.0, x, -1.0, x_exac, error);
         erel = sqrt(dg::blas2::dot( w2d, error) / dg::blas2::dot( w2d, x_exac));
-
+        std::cout << "    universal-iter: "<<std::setw(3)<< iter << "\n";
+        if (u==3 || u==4) std::cout << "    universal-iter_sum: "<<std::setw(3)<<iter_sum << "\n";
         std::cout << "    universal-time: "<<time<<"s \n";
         std::cout << "    universal-error: "<<erel  << "\n";
-        
     }
+    err = nc_close(ncid);
+
     return 0;
 }
