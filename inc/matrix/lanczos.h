@@ -178,22 +178,11 @@ class UniversalLanczos
         tridiag( op, std::forward<MatrixType>(A), b, weights, eps,
                 nrmb_correction, error_norm, res_fac, q);
         return m_TH;
-    }
-
-    /*template< class MatrixType, class ContainerType0, class ContainerType1, class UnaryOp>
-    const HDiaMatrix& tridiag( UnaryOp f, MatrixType&& A, const ContainerType0& b, const ContainerType1& weights, value_type eps = 1e-12, value_type nrmb_correction = 1., std::string error_norm = "universal", value_type res_fac = 1., unsigned q = 1 )
-    {
-        tridiag( f, std::forward<MatrixType>(A), b, weights, eps,
-                nrmb_correction, error_norm, res_fac, q);
-        return m_TH;
-    }*/
-    
+    }    
     ///@brief Get the number of iterations in the last call to \c tridiag or \c solve
     /// (same as T.num_rows)
     ///@return the number of iterations in the last call to \c tridiag or \c solve
     unsigned get_iter() const {return m_iter;}
-  
-
     /** @brief compute \f$ x = |b|_W V y \f$ from a given tridiagonal matrix T
      * and in-place re-computation of V
      *
@@ -208,7 +197,7 @@ class UniversalLanczos
      */
     template< class MatrixType, class DiaMatrixType, class ContainerType0,
         class ContainerType1,class ContainerType2>
-    void normMbVy( MatrixType&& A, const DiaMatrixType& T, const ContainerType0& y, ContainerType1& x, const ContainerType2& b, value_type bnorm)
+    void normMbVy( MatrixType&& A, const DiaMatrixType& T, const ContainerType0& y, ContainerType1& x, const ContainerType2& b, const value_type bnorm)
     {
         dg::blas1::copy(0., x);
         if( 0 == bnorm )
@@ -223,14 +212,14 @@ class UniversalLanczos
             if( y[i] != 0)
                 less_iter = i+1;
         dg::blas1::axpby( y[0]*bnorm, m_v, 1., x); //Compute b= |b| V y
+
         for ( unsigned i=0; i<less_iter-1; i++)
         {
             dg::blas2::symv( std::forward<MatrixType>(A), m_v, m_vp);
-            dg::blas1::axpbypgz( -T.values(i,0)/T.values(i,2), m_vm, -T.values(i,1)/T.values(i,2), m_v, 1.0/T.values(i,2), m_vp);
+            dg::blas1::axpbypgz( -T.values(i,0)/T.values(i,2), m_vm, -T.values(i,1)/T.values(i,2), m_v, 1.0/T.values(i,2), m_vp); 
             dg::blas1::axpby( y[i+1]*bnorm, m_vp, 1., x); //Compute b= |b| V y
             m_vm.swap( m_v);
             m_v.swap( m_vp);
-
         }
     }
 
