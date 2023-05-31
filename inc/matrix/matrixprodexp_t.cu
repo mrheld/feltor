@@ -252,7 +252,6 @@ int main(int argc, char * argv[])
             auto Rf = krylovfunceigend.tridiag(func, d,  b, w2d, eps, 1.,  "universal");
             unsigned iter_Rf = krylovfunceigend.get_iter();
             std::cout << "    universal-iter-Rf: "<<std::setw(3)<< iter_Rf << "\n";
-//             cusp::print(Rf);
             
             //make eigendecomposition of Rf = E_Rf  eval_Rf E_Rf^T 
             cusp::array2d< double, cusp::host_memory> evecs_Rf(iter_Rf,iter_Rf);
@@ -262,7 +261,6 @@ int main(int argc, char * argv[])
 
             cusp::convert(evecs_Rf, E_Rf);
             cusp::transpose(E_Rf, E_Rf_t);           
-//                         cusp::print(E_Rf);
 // 
             //Compute h_k
             dg::HVec e_1(iter_Rf,0.), e_k(e_1), y(e_1); //unit vector e_1
@@ -273,7 +271,6 @@ int main(int argc, char * argv[])
             dg::blas1::scal(x, 0.0);
             for( unsigned k=0; k<iter_Rf; k++)
             {
-//                 std::cout << "k = " << k  << std::endl;
                 dg::blas1::scal(e_k, 0.0);
                 e_k[k] = 1.;
                 dg::blas1::pointwiseDot(e_k, y, e_1); //y = e_k * (E_Rf^T e_1) = 1_k E_Rf^T e_1 
