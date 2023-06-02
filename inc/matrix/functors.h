@@ -118,6 +118,26 @@ struct GyrolagK
 };
 
 /**
+ * @brief \f$ f(x) =exp(-t(1./x-1))/x\f$ 
+ *
+ * @tparam T value type
+ */
+template<class T = double>
+struct GyrointegrantSplit
+{
+    GyrointegrantSplit(double a, double t): m_a(a), m_t(t) {}
+
+    DG_DEVICE T  operator()(double x) const
+    {
+        return exp(-m_t*(1./(m_a*x) - 1.0))/(m_a*x);
+    }
+  private:
+    double m_a;
+    double m_t;
+};
+
+
+/**
  * @brief \f$ f(x) =exp(-x)*L_n(x)*J_0(Sqrt(4.0*x*t))\f$ 
  *
  * @tparam T value type
@@ -174,5 +194,22 @@ struct Gyrointegranttrans2
     unsigned m_n;
 };
 
+/**
+ * @brief \f$ f(x) =J_0(-4.0*t*ln(x))\f$ 
+ *
+ * @tparam T value type
+ */
+template<class T = double>
+struct Gyrointegranttranslog
+{
+    Gyrointegranttranslog(double t):m_t(t) {}
+
+    DG_DEVICE T  operator()(double x) const
+    {
+        return boost::math::cyl_bessel_j(0, sqrt(-4.0*m_t*log(x)));
+    }
+  private:
+    double m_t;
+};
 }//namespace mat
 }//namespace dg

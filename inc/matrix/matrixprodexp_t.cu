@@ -27,12 +27,6 @@ const double m=3./2.;
 const double n=4.;
 const double ms=1./2.;
 const double ns=2.;
-// dg::bc bcx = dg::DIR;
-// dg::bc bcy = dg::DIR;
-// const double m=4;
-// const double n=4.;
-// const double ms=2;
-// const double ns=2.;
 const double alpha = 1./2.;
 const double ell_fac = (m*m+n*n);
 const double ell_facs = (ms*ms+ns*ns);
@@ -124,7 +118,9 @@ int main(int argc, char * argv[])
 //         dg::blas1::pointwiseDot(d,d,d);
         //initialize d = heaviside bump function
         Container d = dg::evaluate(dg::Cauchy(lx/2., ly/2., 2., 2., amp), g);
-        
+//         b_h = dg::evaluate(dg::SinXSinY(amp, 0.0, 8.0, 8.0), g);
+//         dg::blas1::pointwiseDot(b_h,b_h,b_h);      
+//         dg::blas1::pointwiseDot(d,b_h,d);
         //add constant background field to d
         dg::blas1::plus(d, bgamp);
         
@@ -245,10 +241,7 @@ int main(int argc, char * argv[])
             time = t.diff();*/        
        
             t.tic();
-            //Tridiagonalize diagonal matrix D
-            //test for b=1
-//             Container b = dg::evaluate(dg::ONE(), g);
-            
+            //Tridiagonalize diagonal matrix D            
             auto Rf = krylovfunceigend.tridiag(func, d,  b, w2d, eps, 1.,  "universal");
             unsigned iter_Rf = krylovfunceigend.get_iter();
             std::cout << "    universal-iter-Rf: "<<std::setw(3)<< iter_Rf << "\n";
@@ -284,8 +277,6 @@ int main(int argc, char * argv[])
                 std::cout << "    universal-iter-Tf: "<<std::setw(3)<< krylovfunceigen.get_iter() << "\n";
 
             }
-            
-            //Tridiagonalize A first to T with the stopping condition for the function exp(-max(d)*alpha A)
             t.toc();
             time = t.diff();
         }
@@ -335,7 +326,7 @@ int main(int argc, char * argv[])
         else 
         {
             Container fd(d); // helper variable
-            //Compute absolute and relative error in adjointness //not useful if the operator is self-adjoint! use general g!
+            //Compute absolute and relative error in adjointness 
             if (u==2 || u==4)
             {
                 x_h = dg::evaluate(lhss, g); // -> g

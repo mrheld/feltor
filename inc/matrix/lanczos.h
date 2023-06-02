@@ -223,8 +223,7 @@ class UniversalLanczos
         }
     }
 
-    template < class MatrixType, class ContainerType1, class ContainerType2, class UnaryOp>    
-    //     void tridiag(UnaryOp f, MatrixType&& A, const ContainerType1& b, const ContainerType2& weights, value_type eps, value_type nrmb_correction, std::string error_norm = "residual", value_type res_fac = 1., unsigned q = 1 )
+    template < class MatrixType, class ContainerType1, class ContainerType2, class UnaryOp>
     const HDiaMatrix& tridiag(UnaryOp f, MatrixType&& A, const ContainerType1& b, const ContainerType2& weights, value_type eps, value_type nrmb_correction, std::string error_norm = "residual", value_type res_fac = 1., unsigned q = 1 )
     {
 #ifdef MPI_VERSION
@@ -276,8 +275,7 @@ class UniversalLanczos
             {
                 if( i>=q &&(  (i<=10) || (i>10 && i%10 == 0) ))
                 {
-                    residual = compute_universal_error( m_TH, i, q, f,
-                            m_yH)*m_bnorm;
+                    residual = compute_universal_error( m_TH, i, q, f, m_yH)*m_bnorm;
                     xnorm = dg::fast_l2norm( m_yH)*m_bnorm;
                 }
                 else
