@@ -23,19 +23,24 @@ const double lx = 2.*M_PI;
 const double ly = 2.*M_PI;
 dg::bc bcx = dg::DIR;
 dg::bc bcy = dg::PER;
+// const double m=3./2.;
+// const double n=4.;
+// const double m=1./2.;
+// const double n=1.;
 const double m=3./2.;
-const double n=4.;
+const double n=2.;
 const double ms=1./2.;
 const double ns=2.;
 const double alpha = 1./2.;
 const double ell_fac = (m*m+n*n);
 const double ell_facs = (ms*ms+ns*ns);
 
-const double amp=0.5;
-const double bgamp=0.0;
+const double amp=10.0;
+const double bgamp=1.0;
 
 double lhs( double x, double y){ return sin(x*m)*sin(y*n);}
 double lhss( double x, double y){ return sin(x*ms)*sin(y*ns);}
+double sin2( double x, double y){ return amp*sin(x*m)*sin(y*n)*sin(x*m)*sin(y*n);}
 using Matrix = dg::DMatrix;
 using Container = dg::DVec;
 
@@ -65,11 +70,8 @@ int main(int argc, char * argv[])
     double erel = 0;
 
     dg::Grid2d g( 0, lx, 0, ly,n, Nx, Ny, bcx, bcy);
-    const Container w2d = dg::create::weights( g);
-
-    double max_weights = dg::blas1::reduce(w2d, 0., dg::AbsMax<double>() );
-    double min_weights = dg::blas1::reduce(w2d, max_weights, dg::AbsMin<double>() );
-    std::cout << "#   min(W)  = "<<min_weights <<"  max(W) = "<<max_weights << "\n";
+    const Container w2d = dg::create::weights( g);//=M
+    
     dg::Elliptic<dg::CartesianGrid2d, Matrix, Container> A( {g, dg::centered, 1.0});
 
     std::vector< std::function<double (double)>> funcs{
@@ -78,24 +80,29 @@ int main(int argc, char * argv[])
         [](double x) { return dg::mat::GyrolagK<double>(0.,-alpha)(x);},
 //         [](double x) { return dg::mat::GyrolagK<double>(0.,-alpha)(x);},
 //         [](double x) { return dg::mat::GyrolagK<double>(0.,-alpha)(x);}        
+        [](double x) { return dg::mat::GyrolagK<double>(0.,-alpha)(x);},   
+        [](double x) { return dg::mat::GyrolagK<double>(0.,-alpha)(x);}  
     };
     std::vector<std::string> outs = {
             "K_0(-alpha A)",
             "K_0(d, -alpha A)",
             "K_0(-alpha A, d)",
 //             "K_0_naive(d, -alpha A)",
-//             "K_0_naive(-alpha A, d)"
+//             "K_0_naive(-alpha A, d)",
+            "K_0(-alpha d A)",
+            "K_0(-alpha A d )"
     };
     
     //Plot into netcdf file
     size_t start = 0;
     dg::file::NC_Error_Handle err;
     int ncid;
-    err = nc_create( "visual.nc", NC_NETCDF4|NC_CLOBBER, &ncid);
+    err = nc_create( "visual11.nc", NC_NETCDF4|NC_CLOBBER, &ncid);
     int dim_ids[5], tvarID;
     err = dg::file::define_dimensions( ncid, dim_ids, &tvarID, g);
 
-    std::string names[5] = {"K0","K0_prod","K0_prodadj","K0_prod_naive","K0_prodadj_naive"};
+//     std::string names[5] = {"K0","K0_prod","K0_prodadj","K0_prod_naive","K0_prodadj_naive"};
+    std::string names[5] = {"K0","K0_prod","K0_prodadj","K0_app","K0_appadj"};
     int dataIDs[5];
     for( unsigned i=0; i<5; i++){
     err = nc_def_var( ncid, names[i].data(), NC_DOUBLE, 3, dim_ids, &dataIDs[i]);}
@@ -110,19 +117,27 @@ int main(int argc, char * argv[])
         Container b_h(b);
         Container one = dg::evaluate(dg::ONE(), g);
         
-        //note that d must fulfill boundary conditions and should be positive definite!
+        //note that d must fulfill boundary conditions and and must be >0
         //initialize constant d
-//         Container d = dg::evaluate(dg::ZERO(), g);        
-        //initialize d = (sin(2 x) sin(2y))^2
-//         Container d = dg::evaluate(dg::SinXSinY(amp, 0.0, 1.0/2.0, 2.0), g);
-//         dg::blas1::pointwiseDot(d,d,d);
+//         Container d = dg::evaluate(dg::ZERO(), g);   
+        
+        //initialize d = amp*(sin( x/2) sin(y))^2
+//         Container d = dg::evaluate(sin2, g);
+        
         //initialize d = heaviside bump function
-        Container d = dg::evaluate(dg::Cauchy(lx/2., ly/2., 2., 2., amp), g);
-//         b_h = dg::evaluate(dg::SinXSinY(amp, 0.0, 8.0, 8.0), g);
+        Container d = dg::evaluate(dg::Cauchy(lx/2., ly/2., 3., 3., amp), g);
+//         b_h = dg::evaluate(dg::SinXSinY(amp, 0.0, 4.0, 4.0), g); //superimpose sinxsiny
 //         dg::blas1::pointwiseDot(b_h,b_h,b_h);      
 //         dg::blas1::pointwiseDot(d,b_h,d);
+        
         //add constant background field to d
         dg::blas1::plus(d, bgamp);
+        
+        Container w2d_AD = dg::create::weights( g); 
+        Container w2d_DA = dg::create::weights( g); 
+        dg::blas1::pointwiseDot( w2d, d, w2d_AD); //scale norm for A D self adjoint in the scaled norm M D , requires d\neq 0
+        dg::blas1::pointwiseDivide( w2d, d, w2d_DA); //scale norm for D A self adjoint in the scaled norm M D^{-1}, requires d\neq 0
+    
         
         std::cout << outs[u] << ":\n";
 
@@ -182,67 +197,69 @@ int main(int argc, char * argv[])
         }
         if (u==2)
         {   
-            /*t.tic();
-             //Tridiagonalize A first to T with the stopping condition for the function exp(-max(d)*alpha A)
-            auto Tf = krylovfunceigen.tridiag(func, A,  b, w2d, eps, 1,  "universal");
-            iter = krylovfunceigen.get_iter();            
-            //make eigendecomposition of f(d T) e_1 = E_T f(d eval_T) E_T^T e_1
-            cusp::array2d< double, cusp::host_memory> evecs(iter,iter);
-            cusp::array1d< double, cusp::host_memory> evals(iter);
-            cusp::lapack::stev(Tf.values.column(1), Tf.values.column(2), evals, evecs, 'V');            
-            //Compute c[l], v[l] and utlize them for x
-            std::vector<Container> v{iter,d}, c{iter,d};
-            dg::HVec e_k(iter, 0.); //unit vector e_k
-            Container fd(d); // helper variable
-            dg::blas1::scal(x, 0.0);            
-            //precompute v_k
-            for( unsigned k=0; k<iter; k++)
-            {
-                dg::blas1::copy( 0, v[k]); // init sum
-                dg::blas1::copy( 0, c[k]); // init sum
-                //e_l
-                dg::blas1::scal(e_k, 0.0);
-                e_k[k] = 1.;
-                //compute v[l]
-//                 krylovfunceigen.normMbVy(A, Tf, e_k, v[k], b, 1.0); //v_k=  V e_k //set bnorm = 1.0
-                //interestingly the latter is not the same than the two lines below, why ? 
-                krylovfunceigen.normMbVy(A, Tf, e_k, v[k], b, krylovfunceigen.get_bnorm()); //v_k= ||b||_M V e_k 
-                dg::blas1::scal( v[k], 1./krylovfunceigen.get_bnorm()); //v_k = V e_k
-
-            }
-            //Compute v[k]
-            for( unsigned l=0; l<iter; l++)
-            {
-                for( unsigned i=0; i<iter; i++)
-                {
-                    dg::blas1::axpby( evals[i], d, 0., fd); //fd = lambda_i d
-                    dg::blas1::transform(fd, fd, dg::mat::GyrolagK<double>(0.,-alpha)); //fd =  f(lambda_i d)
-                    for( unsigned k=0; k<iter; k++)
-                    {
-                        dg::blas1::pointwiseDot(evecs(l,i)*evecs(i,k), fd, v[k], 1.0, c[l]); //c_l += (eps_{l,i} eps_{k,i}) f(lambda_i d) * v_k
-                    }
-                }
-                dg::blas1::axpby(dg::blas2::dot(c[l], w2d, b),  v[l], 1., x); //x += (c_l.M b) v_l 
-                
-            }
-            dg::blas1::scal(b_h,0.);
-            dg::blas1::scal(fd,0.);
-            for( unsigned l=0; l<iter; l++)
-            {
-                dg::blas1::axpby(dg::blas2::dot(v[l], w2d, d),  v[l], 1., b_h); 
-                dg::blas1::axpby(dg::blas2::dot(v[l], w2d, b),  v[l], 1., fd); 
-            }
-            dg::blas1::axpby(1.0, b_h, -1.0, d, error);
-            std::cout << "error_abs d = " << sqrt(dg::blas2::dot( w2d, error)) << std::endl;
-            std::cout << "error d = " << sqrt(dg::blas2::dot( w2d, error) / dg::blas2::dot( w2d, d)) << std::endl;
-            dg::blas1::axpby(1.0, fd, -1.0, b, error);
-            std::cout << "error b = " << sqrt(dg::blas2::dot( w2d, error) / dg::blas2::dot( w2d, b)) << std::endl;
-            t.toc();
-            time = t.diff();*/        
-       
+//             //algorithm 1 (not converging)
+//             t.tic();
+//              //Tridiagonalize A first to T with the stopping condition for the function exp(-max(d)*alpha A)
+//             auto Tf = krylovfunceigen.tridiag(func, A,  b, w2d, eps, 1,  "universal");
+//             iter = krylovfunceigen.get_iter();            
+//             //make eigendecomposition of f(d T) e_1 = E_T f(d eval_T) E_T^T e_1
+//             cusp::array2d< double, cusp::host_memory> evecs(iter,iter);
+//             cusp::array1d< double, cusp::host_memory> evals(iter);
+//             cusp::lapack::stev(Tf.values.column(1), Tf.values.column(2), evals, evecs, 'V');            
+//             //Compute c[l], v[l] and utlize them for x
+//             std::vector<Container> v{iter,d}, c{iter,d};
+//             dg::HVec e_k(iter, 0.); //unit vector e_k
+//             Container fd(d); // helper variable
+//             dg::blas1::scal(x, 0.0);            
+//             //precompute v_k
+//             for( unsigned k=0; k<iter; k++)
+//             {
+//                 dg::blas1::copy( 0, v[k]); // init sum
+//                 dg::blas1::copy( 0, c[k]); // init sum
+//                 //e_l
+//                 dg::blas1::scal(e_k, 0.0);
+//                 e_k[k] = 1.;
+//                 //compute v[l]
+// //                 krylovfunceigen.normMbVy(A, Tf, e_k, v[k], b, 1.0); //v_k=  V e_k //set bnorm = 1.0; the latter is not the same than the two lines below, why ? 
+//                 krylovfunceigen.normMbVy(A, Tf, e_k, v[k], b, krylovfunceigen.get_bnorm()); //v_k= ||b||_M V e_k 
+//                 dg::blas1::scal( v[k], 1./krylovfunceigen.get_bnorm()); //v_k = V e_k
+//             }
+//             //Compute v[k]
+//             for( unsigned l=0; l<iter; l++)
+//             {
+//                 for( unsigned i=0; i<iter; i++)
+//                 {
+//                     dg::blas1::axpby( evals[i], d, 0., fd); //fd = lambda_i d
+//                     dg::blas1::transform(fd, fd, dg::mat::GyrolagK<double>(0.,-alpha)); //fd =  f(lambda_i d)
+//                     for( unsigned k=0; k<iter; k++)
+//                     {
+//                         dg::blas1::pointwiseDot(evecs(l,i)*evecs(i,k), fd, v[k], 1.0, c[l]); //c_l += (eps_{l,i} eps_{k,i}) f(lambda_i d) * v_k
+//                     }
+//                 }
+//                 dg::blas1::axpby(dg::blas2::dot(c[l], w2d, b),  v[l], 1., x); //x += (c_l.M b) v_l 
+//                 
+//             }
+//             //Compute errors in b and d approximation
+//             dg::blas1::scal(b_h,0.);
+//             dg::blas1::scal(fd,0.);
+//             for( unsigned l=0; l<iter; l++)
+//             {
+//                 dg::blas1::axpby(fabs(dg::blas2::dot(v[l], w2d, d)),  v[l], 1., b_h); 
+//                 dg::blas1::axpby(dg::blas2::dot(v[l], w2d, b),  v[l], 1., fd); 
+//             }
+//             
+//             dg::blas1::axpby(1.0, b_h, -1.0, d, error);
+//             std::cout << "    error_abs d = " << sqrt(dg::blas2::dot( w2d, error)) << std::endl;
+//             std::cout << "    error d = " << sqrt(dg::blas2::dot( w2d, error) / dg::blas2::dot( w2d, d)) << std::endl;
+//             dg::blas1::axpby(1.0, fd, -1.0, b, error);
+//             std::cout << "    error b = " << sqrt(dg::blas2::dot( w2d, error) / dg::blas2::dot( w2d, b)) << std::endl;
+//             t.toc();
+//             time = t.diff();
+//             
+            //algorithm 2 
             t.tic();
             //Tridiagonalize diagonal matrix D            
-            auto Rf = krylovfunceigend.tridiag(func, d,  b, w2d, eps, 1.,  "universal");
+            auto Rf = krylovfunceigend.tridiag(func, d,  b, w2d,  1e-12, 1.,  "universal");
             unsigned iter_Rf = krylovfunceigend.get_iter();
             std::cout << "    universal-iter-Rf: "<<std::setw(3)<< iter_Rf << "\n";
             
@@ -254,7 +271,7 @@ int main(int argc, char * argv[])
 
             cusp::convert(evecs_Rf, E_Rf);
             cusp::transpose(E_Rf, E_Rf_t);           
-// 
+
             //Compute h_k
             dg::HVec e_1(iter_Rf,0.), e_k(e_1), y(e_1); //unit vector e_1
             Container fd(d); 
@@ -279,6 +296,7 @@ int main(int argc, char * argv[])
             }
             t.toc();
             time = t.diff();
+            A.set_chi(one);
         }
 //         if (u==3) 
 //         {
@@ -294,6 +312,7 @@ int main(int argc, char * argv[])
 //             }
 //             t.toc();
 //             time = t.diff();
+//             A.set_chi(one);
 //         }
 //         if (u==4) 
 //         {
@@ -312,9 +331,29 @@ int main(int argc, char * argv[])
 //                 iter_sum+=iter;
 //                 dg::blas1::axpby(1.0, x_h, 1.0, x);
 //             }
-//             t.toc();
+//             t.toc();m_precond
 //             time = t.diff();
+//            A.set_chi(one);
 //         }
+        if (u==3)
+        {
+            A.set_delta(d); //A->  D A
+            t.tic();
+            iter= krylovfunceigen.solve(x, func, A, b, w2d_DA, eps, 1., "universal"); 
+            t.toc();
+            time = t.diff();
+            A.set_delta(one);
+        }
+        if (u==4)
+        {
+            A.set_gamma(d); //A-> A D
+            t.tic();            
+            iter= krylovfunceigen.solve(x, func, A, b, w2d_AD, eps, 1., "universal"); 
+            //weights of adjoint missing?
+            t.toc();
+            time = t.diff();
+            A.set_gamma(one);
+        }
         //write solution into file
         dg::assign( x, transferH);
         dg::file::put_vara_double( ncid, dataIDs[u], start, g, transferH);      

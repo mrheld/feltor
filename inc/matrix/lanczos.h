@@ -67,7 +67,7 @@ class UniversalLanczos
 {
   public:
     using value_type = get_value_type<ContainerType>; //!< value type of the ContainerType class
-    using HCooMatrix = cusp::coo_matrix<int, value_type, cusp::host_memory>;
+    using HCooMatrix = cusp::coo_matrix<int, value_type, cusp::host_memory>; //never used
     using HDiaMatrix = cusp::dia_matrix<int, value_type, cusp::host_memory>;
     using HVec = dg::HVec;
     ///@brief Allocate nothing, Call \c construct method before usage

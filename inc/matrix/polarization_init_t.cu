@@ -46,6 +46,8 @@ int main()
 
     dg::CartesianGrid2d grid2d( 0, lx, 0, ly, n, Nx, Ny, bcx, bcy);
     const Container w2d = dg::create::weights( grid2d);
+    const Container inv_w2d = dg::create::inv_weights( grid2d);
+
 
     dg::Cauchy cauchyfunc( lx/2., ly/2., lx/4., ly/4., amp);
     Container chi =  dg::evaluate( cauchyfunc, grid2d);
@@ -64,12 +66,12 @@ int main()
         std::cout << "#####ff polarization charge chi initialization test\n";
         //TODO converges very slowly, should not converge that slowly ....
 //         {
-//             dg::PolChargeN< dg::CartesianGrid2d, Matrix, Container > polN(grid2d, grid2d.bcx(), grid2d.bcy(), dg::centered, 1., false);
+//             dg::mat::PolChargeN< dg::CartesianGrid2d, Matrix, Container > polN(grid2d, grid2d.bcx(), grid2d.bcy(), dg::centered, 1.);
 //             polN.set_phi(phi);
 //             polN.set_dxphi(dxphi);
 //             polN.set_dyphi(dyphi);
 //             polN.set_lapphi(lapphi);
-//
+// 
 //             double eps = 1e-5;
 //             double maxinner  = 30;
 //             double maxouter = 10;
@@ -80,40 +82,40 @@ int main()
 //             dg::blas1::scal(x, 0.0);
 //             dg::blas1::plus(x, 1.0); //x solution must be positive
 //             t.tic();
-//             unsigned number = lgmres.solve( polN, x, rho, polN.inv_weights(), polN.weights(), eps, 1);
+//             unsigned number = lgmres.solve( polN, x, rho, inv_w2d, w2d, eps, 1);
 //             t.toc();
 //             dg::blas1::axpby( 1., chi, -1., x, error);
-//
+// 
 //             std::cout << " Time: "<<t.diff() << "\n";
 //             std::cout << "number of iterations:  "<<number<< std::endl;
 //             std::cout << "rel error " << sqrt( dg::blas2::dot( w2d, error)/ dg::blas2::dot( w2d, chi))<<std::endl;
 //         }
 //         {
-//             dg::PolChargeN< dg::CartesianGrid2d, Matrix, Container > polN(grid2d, grid2d.bcx(), grid2d.bcy(), dg::centered, 1, false);
+//             dg::mat::PolChargeN< dg::CartesianGrid2d, Matrix, Container > polN(grid2d, grid2d.bcx(), grid2d.bcy(), dg::centered, 1.0);
 //             polN.set_phi(phi);
 //             polN.set_dxphi(dxphi);
 //             polN.set_dyphi(dyphi);
 //             polN.set_lapphi(lapphi);
-//
-//             dg::CG <Container> pcg( x,  grid2d.size()*100);
+// 
+//             dg::PCG <Container> pcg( x,  grid2d.size());
 //             double eps = 1e-5;
 //             std::cout << "Type eps (1e-5)\n";
 //             std::cin >> eps;
-//             dg::blas2::symv(polN.weights(), rho, temp);
+// //             dg::blas2::symv(w2d, rho, temp);
 //             dg::blas1::scal(x, 0.0);
-//             dg::blas1::plus(x, 1.0); //x solution must be positive
+// //             dg::blas1::plus(x, 1.0); //x solution must be positive
 //             t.tic();
-//             unsigned number = pcg( polN, x, temp, polN.precond(), polN.weights(), eps, 1);
+//             pcg.set_verbose(true);
+//             unsigned number = pcg.solve( polN, x, rho, 1.0, w2d, eps);
 //             t.toc();
 //             dg::blas1::axpby( 1., chi, -1., x, error);
-//
+// 
 //             std::cout << " Time: "<<t.diff() << "\n";
 //             std::cout << "number of iterations:  "<<number<< std::endl;
 //             std::cout << "rel error " << sqrt( dg::blas2::dot( w2d, error)/ dg::blas2::dot( w2d, chi))<<std::endl;
 //         }
         {
-            dg::mat::PolChargeN< dg::CartesianGrid2d, Matrix, Container >
-                polN(grid2d, grid2d.bcx(), grid2d.bcy(), dg::centered, 1.0);
+            dg::mat::PolChargeN< dg::CartesianGrid2d, Matrix, Container > polN(grid2d, grid2d.bcx(), grid2d.bcy(), dg::centered, 1.0);
             polN.set_phi(phi);
             polN.set_dxphi(dxphi);
             polN.set_dyphi(dyphi);
@@ -139,7 +141,7 @@ int main()
             std::cout << "number of iterations:  "<<number<< std::endl;
             std::cout << "rel error " << sqrt( dg::blas2::dot( w2d, error)/ dg::blas2::dot( w2d, chi))<<std::endl;
         }
-//
+
                     //Plot into netcdf file
         size_t start = 0;
         dg::file::NC_Error_Handle err;

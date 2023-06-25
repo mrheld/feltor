@@ -19,16 +19,18 @@ const double lx = 2.*M_PI;
 const double ly = 2.*M_PI;
 dg::bc bcx = dg::DIR;
 dg::bc bcy = dg::PER;
-const double m=3./2.;
-const double n=4.;
+//const double m=3./2.;
+//const double n=4.;
+const double m=1./2.;
+const double n=1.;
 const double ms=1./2.;
 const double ns=2.;
 const double alpha = 1./2.;
 const double ell_fac = (m*m+n*n);
 const double ell_facs = (ms*ms+ns*ns);
 
-const double amp=0.5;
-const double bgamp=0.0;
+const double amp=20.0;
+const double bgamp=1.0;
 
 double lhs( double x, double y){ return sin(x*m)*sin(y*n);}
 double lhss( double x, double y){ return sin(x*ms)*sin(y*ns);}
@@ -89,7 +91,7 @@ int main(int argc, char * argv[])
         Container one = dg::evaluate(dg::ONE(), g);
         
         //note that d must fulfill boundary conditions and should be positive definite!
-        Container d = dg::evaluate(dg::Cauchy(lx/2., ly/2., 2., 2., amp), g);
+        Container d = dg::evaluate(dg::Cauchy(lx/2., ly/2., 3., 3., amp), g);
         //add constant background field to d
         dg::blas1::plus(d, bgamp);
         
@@ -153,7 +155,7 @@ int main(int argc, char * argv[])
         {
             t.tic();
             //Tridiagonalize diagonal matrix d
-            auto Rf = krylovfunceigend.tridiag(func, d,  b, w2d, eps, 1.,  "universal");
+            auto Rf = krylovfunceigend.tridiag(func, d,  b, w2d, 1e-12, 1.,  "universal");
             unsigned iter_Rf = krylovfunceigend.get_iter();
             iter_sum+=iter_Rf;
             std::cout << "#    universal-iter-Rf: "<<std::setw(3)<< iter_Rf << "\n";
@@ -187,7 +189,7 @@ int main(int argc, char * argv[])
                 iter= krylovfunceigen.solve(x_h, func, A, fd,  w2d, eps, 1., "universal"); // x_h = ||v_k||_M V_Tf f(Tf lambda_Rf,k) v_k
                 iter_sum+=iter;
                 dg::blas1::axpby(1.0, x_h, 1.0, x);
-                std::cout << "#    universal-iter-Tf_"<< k <<": "<<std::setw(3)<< krylovfunceigen.get_iter() << "\n";
+                std::cout << "#    universal-iter-Tf_"<< k <<": "<<std::setw(3)<< krylovfunceigen.get_iter() << "      eval_Rf: " << evals_Rf[k] << "\n";
             }
             t.toc();
             time = t.diff();

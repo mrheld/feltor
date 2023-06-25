@@ -106,7 +106,7 @@ class Elliptic1d
 
         dg::assign( dg::create::weights(g),       m_weights);
         dg::assign( dg::evaluate( dg::one, g),    m_precond);
-        m_tempx = m_sigma = m_precond;
+        m_tempx = m_sigma = m_delta = m_gamma = m_precond;
     }
 
     ///@copydoc hide_construct
@@ -117,6 +117,27 @@ class Elliptic1d
         *this = Elliptic1d( std::forward<Params>( ps)...);
     }
 
+    template<class ContainerType0>
+    void set_delta( const ContainerType0& delta)
+    {
+        dg::blas1::copy( delta, m_delta);
+        //update preconditioner
+        dg::blas1::pointwiseDivide( 1., delta, m_precond);
+        // delta is possibly zero, which will invalidate the preconditioner
+        // it is important to call this blas1 function because it can
+        // overwrite NaN in m_precond in the next update
+    }
+    
+    template<class ContainerType0>
+    void set_gamma( const ContainerType0& gamma)
+    {
+        dg::blas1::copy( gamma, m_gamma);
+        //update preconditioner
+        dg::blas1::pointwiseDivide( 1., gamma, m_precond);
+        // gamma is possibly zero, which will invalidate the preconditioner
+        // it is important to call this blas1 function because it can
+        // overwrite NaN in m_precond in the next update
+    }
     /**
      * @brief Change scalar part Chi
      *
@@ -174,9 +195,11 @@ class Elliptic1d
     template<class ContainerType0, class ContainerType1>
     void symv( value_type alpha, const ContainerType0& x, value_type beta, ContainerType1& y)
     {
-        dg::blas2::gemv( m_rightx, x, m_tempx);
+        dg::blas1::pointwiseDot(m_gamma, x, y);
+        dg::blas2::gemv( m_rightx, y, m_tempx);
         dg::blas1::pointwiseDot( m_tempx, m_sigma, m_tempx);
         dg::blas2::symv( -alpha, m_leftx, m_tempx, beta, y);
+        dg::blas1::pointwiseDot(m_delta, y, y);
         //add jump terms
         if( 0.0 != m_jfactor )
         {
@@ -189,6 +212,8 @@ class Elliptic1d
     Container m_weights, m_precond;
     Container m_tempx;
     Container m_sigma;
+    Container m_delta;
+    Container m_gamma;
     value_type m_jfactor;
 };
 
@@ -279,6 +304,7 @@ class Elliptic2d
         m_temp = m_tempx = m_tempy = m_weights;
         m_chi=g.metric();
         m_sigma = m_vol = dg::tensor::volume(m_chi);
+        m_delta=m_gamma=m_precond;
     }
 
     ///@copydoc hide_construct
@@ -289,6 +315,28 @@ class Elliptic2d
         *this = Elliptic2d( std::forward<Params>( ps)...);
     }
 
+    template<class ContainerType0>
+    void set_delta( const ContainerType0& delta)
+    {
+       dg::blas1::copy( delta, m_delta);
+        //update preconditioner
+        dg::blas1::pointwiseDivide( 1., delta, m_precond);      
+        // delta is possibly zero, which will invalidate the preconditioner
+        // it is important to call this blas1 function because it can
+        // overwrite NaN in m_precond in the next update
+    }
+    
+    template<class ContainerType0>
+    void set_gamma( const ContainerType0& gamma)
+    {
+       dg::blas1::copy( gamma, m_gamma);
+        //update preconditioner
+        dg::blas1::pointwiseDivide( 1., gamma, m_precond);      
+        // gamma is possibly zero, which will invalidate the preconditioner
+        // it is important to call this blas1 function because it can
+        // overwrite NaN in m_precond in the next update
+    }
+    
     /**
      * @brief Change scalar part in Chi tensor
      *
@@ -410,9 +458,12 @@ class Elliptic2d
     template<class ContainerType0, class ContainerType1>
     void symv( value_type alpha, const ContainerType0& x, value_type beta, ContainerType1& y)
     {
+        //multiply with gamma
+        dg::blas1::pointwiseDot(m_gamma, x, m_temp);
+        
         //compute gradient
-        dg::blas2::gemv( m_rightx, x, m_tempx); //R_x*f
-        dg::blas2::gemv( m_righty, x, m_tempy); //R_y*f
+        dg::blas2::gemv( m_rightx, m_temp, m_tempx); //R_x*f
+        dg::blas2::gemv( m_righty, m_temp, m_tempy); //R_y*f
 
         //multiply with tensor (note the alias)
         dg::tensor::multiply2d(m_sigma, m_chi, m_tempx, m_tempy, 0., m_tempx, m_tempy);
@@ -420,6 +471,8 @@ class Elliptic2d
         //now take divergence
         dg::blas2::symv( m_lefty, m_tempy, m_temp);
         dg::blas2::symv( -1., m_leftx, m_tempx, -1., m_temp);
+        //multiply with delta 
+        dg::blas1::pointwiseDot( m_delta, m_temp,  m_temp);
 
         //add jump terms
         if( 0.0 != m_jfactor )
@@ -429,7 +482,10 @@ class Elliptic2d
                 dg::blas2::symv( m_jfactor, m_jumpX, x, 0., m_tempx);
                 dg::blas2::symv( m_jfactor, m_jumpY, x, 0., m_tempy);
                 dg::tensor::multiply2d(m_sigma, m_chi, m_tempx, m_tempy, 0., m_tempx, m_tempy);
-                dg::blas1::axpbypgz(1.0,m_tempx,1.0,m_tempy,1.0,m_temp);
+//                 dg::blas1::pointwiseDivide( m_tempx, m_delta, m_tempx);
+//                 dg::blas1::pointwiseDivide( m_tempy, m_delta, m_tempy);
+
+                dg::blas1::axpbypgz(1.0, m_tempx, 1.0, m_tempy, 1.0, m_temp);
             }
             else
             {
@@ -438,6 +494,7 @@ class Elliptic2d
             }
         }
         dg::blas1::pointwiseDivide( alpha, m_temp, m_vol, beta, y);
+//         dg::blas1::pointwiseDot( m_delta, y,  y);
     }
 
     /**
@@ -490,7 +547,7 @@ class Elliptic2d
     Container m_weights, m_precond;
     Container m_tempx, m_tempy, m_temp;
     SparseTensor<Container> m_chi;
-    Container m_sigma, m_vol;
+    Container m_sigma, m_delta, m_gamma, m_vol;
     value_type m_jfactor;
     bool m_chi_weight_jump;
 };

@@ -127,10 +127,9 @@ class PolChargeN
      * @tparam ContainerTypes must be usable with \c Container in \ref dispatch
      */
     template<class ContainerType0, class ContainerType1>
-    void operator()( const ContainerType0& x, ContainerType1& y){
-        symv( 1., x, 0., y);
+    void operator()( const ContainerType0& x,\alpha \Delta_\perp ) ContainerType1& y){
+        symv( 1., x, 0., y);\alpha \Delta_\perp )
     }
-
     /**
      * @brief Compute elliptic term and store in output
      *
@@ -157,16 +156,16 @@ class PolChargeN
     void symv( value_type alpha, const ContainerType0& x, value_type beta, ContainerType1& y)
     {
         //non-symmetric via analytical dx phi, dy phi and lap phi
-        dg::blas1::copy(x, m_temp);
-        dg::blas1::plus( m_temp, -1.);
-        dg::blas2::gemv( m_rightx, m_temp, m_tempx2); //R_x*f
-        dg::blas2::gemv( m_righty, m_temp, m_tempy2); //R_y*f
-
-        dg::tensor::scalar_product2d(1., 1., m_dxphi, m_dyphi, m_chi, 1., m_tempx2, m_tempy2, 0., y); // y= nabla phi chi nabla (N-1)
-        dg::blas1::pointwiseDot(m_lapphi, x, m_tempx);  // m_temp = N Lap phi
-
-        dg::blas1::axpbypgz(1.0, m_tempx, 1.0, m_temp, 1.0, y);
-        dg::blas1::scal(y,-1.0); //y = -nabla phi chi nabla (N-1) -N Lap phi - (N-1)
+//         dg::blas1::copy(x, m_temp);
+//         dg::blas1::plus( m_temp, -1.);
+//         dg::blas2::gemv( m_rightx, m_temp, m_tempx2); //R_x*f
+//         dg::blas2::gemv( m_righty, m_temp, m_tempy2); //R_y*f
+// 
+//         dg::tensor::scalar_product2d(1., 1., m_dxphi, m_dyphi, m_chi, 1., m_tempx2, m_tempy2, 0., y); // y= nabla phi chi nabla (N-1)
+//         dg::blas1::pointwiseDot(m_lapphi, x, m_tempx);  // m_temp = N Lap phi
+// 
+//         dg::blas1::axpbypgz(1.0, m_tempx, 1.0, m_temp, 1.0, y);
+//         dg::blas1::scal(y,-1.0); //y = -nabla phi chi nabla (N-1) -N Lap phi - (N-1)
 
         //non-symmetric (only m_phi and x as input)
 //         dg::blas2::gemv( m_rightx, m_phi, m_dxphi); //R_x*f
@@ -175,35 +174,42 @@ class PolChargeN
 //         dg::blas1::plus( m_temp, -1.); 
 //         dg::blas2::gemv( m_rightx, m_temp, m_tempx2); //R_x*f
 //         dg::blas2::gemv( m_righty, m_temp, m_tempy2); //R_y*f
-//
+// 
 //         dg::tensor::scalar_product2d(1., 1., m_dxphi, m_dyphi, m_chi, 1., m_tempx2, m_tempy2, 0., y); // y= nabla phi chi nabla (N-1)
 //         dg::blas2::symv(m_ell, m_phi, m_lapphi);
 //         dg::blas1::pointwiseDot(m_lapphi, x, m_tempx);  // m_tempx = -N Lap phi
-//
+// 
 //         dg::blas1::axpbypgz(-1.0, m_tempx, 1.0, m_temp, 0.0, y);;
 //         dg::blas1::scal(y,-1.0);
 //
 //         non-symmetric mixed analyital (only m_phi, m_lapphi and x)
-//         dg::blas2::gemv( m_rightx, m_phi, m_dxphi); //R_x*f
+//         dg::blas2::gemv( m_rightx, m_phi, m_dxphi); //         m_ell.set_chi(x);
+//         m_ell.symv(1.0, m_phi, 0.0 , y);
+//         dg::blas1::copy(x, m_temp);
+//         dg::blas1::plus( m_temp, -1.);
+//         dg::blas1::axpby(-1.0, m_temp,  1.0, y);//R_x*f
 //         dg::blas2::gemv( m_righty, m_phi, m_dyphi); //R_y*f
 //         dg::blas1::copy(x, m_temp);
 //         dg::blas1::plus( m_temp, -1.);
 //         dg::blas2::gemv( m_rightx, m_temp, m_tempx2); //R_x*f
 //         dg::blas2::gemv( m_righty, m_temp, m_tempy2); //R_y*f
-//
+// 
 //         dg::tensor::scalar_product2d(1., 1., m_dxphi, m_dyphi, m_chi, 1., m_tempx2, m_tempy2, 0., y); // y= nabla phi chi nabla (N-1)
 //         dg::blas1::pointwiseDot(m_lapphi, x, m_tempx);  // m_temp = N Lap phi
-//
+// 
 //         dg::blas1::axpbypgz(1.0, m_tempx, 1.0, m_temp, 1.0, y);
 //         dg::blas1::scal(y,-1.0);
-//
-        //symmetric discr: only -lap term on rhs //TODO converges to non-physical solution
 //         m_ell.set_chi(x);
 //         m_ell.symv(1.0, m_phi, 0.0 , y);
 //         dg::blas1::copy(x, m_temp);
 //         dg::blas1::plus( m_temp, -1.);
 //         dg::blas1::axpby(-1.0, m_temp,  1.0, y);
-//
+        //symmetric discr: only -lap term on rhs //TODO converges to non-physical solution
+        m_ell.set_chi(x);
+        m_ell.symv(1.0, m_phi, 0.0 , y);
+        dg::blas1::copy(x, m_temp);
+        dg::blas1::plus( m_temp, -1.);
+        dg::blas1::axpby(-1.0, m_temp,  1.0, y);
     }
 
     private:
