@@ -127,8 +127,8 @@ class PolChargeN
      * @tparam ContainerTypes must be usable with \c Container in \ref dispatch
      */
     template<class ContainerType0, class ContainerType1>
-    void operator()( const ContainerType0& x,\alpha \Delta_\perp ) ContainerType1& y){
-        symv( 1., x, 0., y);\alpha \Delta_\perp )
+    void operator()( const ContainerType0& x, ContainerType1& y){
+        symv( 1., x, 0., y);
     }
     /**
      * @brief Compute elliptic term and store in output
