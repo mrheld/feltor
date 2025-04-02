@@ -53,6 +53,12 @@ struct Record{
     std::function<void( dg::x::DVec&, Variables&)> function;
 };
 
+struct RecordProbe{
+    std::string name;
+    std::string long_name;
+    std::function<void(dg::x::DVec&, Variables&)> function;
+};
+
 std::vector<Record> diagnostics2d_static_list = {
     { "xc", "x-coordinate in Cartesian coordinate system",
         []( dg::x::DVec& result, Variables& v ) {
@@ -211,4 +217,27 @@ std::vector<Record1d> diagnostics1d_list = {
         }
     }
 };
+std::vector<RecordProbe> diagnosticsProbe_list = {
+    {"electrons_prb", "Electron density messured by probe",
+        []( dg::x::DVec& result, Variables& v ) {
+            dg::blas1::copy(v.f.density(0), result);
+        }
+    },
+    {"ions_prb", "Ion gyro center density messured by probe",
+        []( dg::x::DVec& result, Variables& v ) {
+            dg::blas1::copy(v.f.density(1), result);
+        }
+    },
+    {"potential_prb", "Electric potential messured by probe",
+        []( dg::x::DVec& result, Variables& v ) {
+             dg::blas1::copy(v.f.potential(0), result);
+        }
+    },
+    {"vorticity_prb", "ExB vorticity potential messured by probe",
+        []( dg::x::DVec& result, Variables& v ) {
+            v.f.compute_vorticity( 1., v.f.potential(0), 0., result);
+        }
+    }
+};
+
 }//namespace esol

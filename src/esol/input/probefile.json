@@ -1,0 +1,75 @@
+{
+"grid": 
+    {"n": 3, "Nx": 64, "Ny": 32, "lx": 200, "ly": 100 }, 
+"timestepper": 
+    {"type": "adaptive", 
+     "tableau": "Bogacki-Shampine-4-2-3", 
+     //"type": "multistep",
+     //"tableau": "TVB-3-3",
+     "rtol": 1e-6,
+     "atol": 1e-10,
+     "dt": 1.0,
+     "probe_dt": 0.1
+     }, 
+"output": 
+    {"type": "netcdf", "itstp": 1, "maxout": 2, "n": 3, "Nx": 64, "Ny": 32}, 
+"elliptic": 
+    {"stages": 3, "eps_pol": [1e-7, 1.0,1.0], "jumpfactor": 1},
+"helmholtz": 
+    {"eps_gamma1": 1e-7, "eps_gamma0": 1e-7, "maxiter_sqrt": 500, "maxiter_cauchy": 30, "eps_cauchy": 1e-12}, 
+"physical": 
+    {
+    "curvature": 2e-03, 
+    "tau"  : 0.0,  
+    "alpha"  : 0.0, 
+    "lambda"  : 5e-04, 
+    "mu_e"  : -0.000272121, 
+    "equations": "ff-lwl-OB",
+    "hwmode" : "modified",
+    "renormalize": true, 
+    "xfac_sep"  : -1000.0, 
+    "sigma_sep"  : 1
+    },
+"source":
+    {
+     "source_type" : "flux", 
+     "source_shape": "gaussian",	
+     "source_rel" : "zero-pol", 
+     "omega_s" : 0.0055,
+     "xfac_s": 20.0,
+     "sigma_s" : 3.0,
+     "n_min" : 0e0,
+     "omega_n": 0e0
+    },
+"profile":
+    {
+     "bgproftype":"exp",    
+     "bgprofamp" : 1.0,
+     "profamp": 2.0,
+     "ln": 100.0,
+     "xfac_p": 0.5
+     },
+"init": 
+    {
+    "type": "bath", 
+    "amplitude": 0.01, 
+    "sigma": 5.0,
+    "mx": 1.0,
+    "my": 1.0, 
+    "posX": 0.5, 
+    "posY": 0.5,
+    "xfac_d": 0.02,
+    "sigma_d" : 2.0
+    },
+"probe":
+    {
+    "save_probes": true,
+    "probe_nbr" :5,
+    "probes" : [[0,48],[48,48],[96,48],[144,48],[191,48]]
+    },
+"nu_perp": 1e-03, 
+"bc_x": "DIR_NEU", 
+"bc_y": "PER",
+"bc_N_x":"NEU",
+"formulation" : "conservative"
+}

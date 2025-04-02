@@ -12,7 +12,7 @@ namespace esol{
 struct Parameters
 {
     unsigned n, Nx, Ny;
-    double dt;
+    double dt, probe_dt ;
     unsigned n_out, Nx_out, Ny_out;
     unsigned itstp;
     unsigned maxout;
@@ -41,6 +41,10 @@ struct Parameters
 
     std::string init, equations, output, timestepper, source_rel, source_type, source_shape, bgproftype, formulation, hwmode;
 
+    bool save_probes;
+    unsigned probe_number;
+    std::vector<std::array<unsigned, 2>> probes;
+
     Parameters( const dg::file::WrappedJsonValue& ws ) {
         n  = ws["grid"].get("n", 5).asUInt();
         Nx = ws["grid"].get("Nx", 64).asUInt();
@@ -50,6 +54,7 @@ struct Parameters
      
         timestepper = ws["timestepper"].get("type", "multistep").asString();
         dt = ws["timestepper"].get("dt",0.05).asDouble();
+        probe_dt = ws["timestepper"].get("probe_dt",0.01).asDouble();
 
         output = ws[ "output"]["type"].asString("glfw");    
         n_out  = ws["output"].get("n",5).asUInt();
@@ -112,6 +117,20 @@ struct Parameters
         posY = ws["init"].get("posY", 0.5).asDouble();    
         xfac_d = ws["init"].get("xfac_d", 0.05).asDouble();
         sigma_d = ws["init"].get("sigma_d", 2.0).asDouble();
+
+        //Adding Probes
+        auto prb = ws["probe"];
+        save_probes = prb.get("save_probes",false).asBool();
+        probe_number = prb.get("probe_nbr",0).asUInt();
+        probes.resize(probe_number);
+        if(save_probes){
+            for( unsigned i=0; i<probe_number; i++)
+            {   
+                for(unsigned j = 0; j<2; j++){
+                    probes[i][j] = prb["probes"][i][j].asUInt();
+                }
+            }
+        }
 
         nu = ws["nu_perp"].asDouble();
         bc_x = dg::str2bc(ws["bc_x"].asString());
